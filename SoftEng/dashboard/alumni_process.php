@@ -26,7 +26,7 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action']) && $_GET['acti
     }
 }
 
-// Handle POST requests for adding or updating alumni
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     try {
         if (isset($_POST['alumni_id'])) {
@@ -114,27 +114,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             exit;
         } else {
             // Add Logic
-            $studentNumber = $_POST['student_number'] ?? '';
-            $lastName = $_POST['last_name'] ?? '';
-            $firstName = $_POST['first_name'] ?? '';
-            $middleName = $_POST['middle_name'] ?? '';
-            $college = $_POST['college'] ?? '';
-            $department = $_POST['department'] ?? '';
-            $section = $_POST['section'] ?? '';
-            $yearGraduated = $_POST['year_graduated'] ?? '';
-            $contactNumber = $_POST['contact_number'] ?? '';
-            $personalEmail = $_POST['personal_email'] ?? '';
-            $employment = $_POST['employment'] ?? '';
-            $employmentStatus = $_POST['employment_status'] ?? '';
-            $presentOccupation = $_POST['present_occupation'] ?? '';
-            $employerName = $_POST['name_of_employer'] ?? '';
-            $employerAddress = $_POST['address_of_employer'] ?? '';
-            $yearsInPresentEmployer = ($_POST['number_of_years_in_present_employer'] ?? '') ?: null;
-            $typeOfEmployer = $_POST['type_of_employer'] ?? '';
-            $lineOfBusiness = $_POST['major_line_of_business'] ?? '';
+            $studentNumber = $_POST['Student_Number'] ?? '';
+            $lastName = $_POST['Last_Name'] ?? '';
+            $firstName = $_POST['First_Name'] ?? '';
+            $middleName = $_POST['Middle_Name'] ?? '';
+            $college = $_POST['College'] ?? '';
+            $department = $_POST['Department'] ?? '';
+            $section = $_POST['Section'] ?? '';
+            $yearGraduated = $_POST['Year_Graduated'] ?? '';
+            $contactNumber = $_POST['Contact_Number'] ?? '';
+            $personalEmail = $_POST['Personal_Email'] ?? '';
+            $employment = $_POST['Employment'] ?? '';
+            $employmentStatus = $_POST['Employment_Status'] ?? '';
+            $presentOccupation = $_POST['Present_Occupation'] ?? '';
+            $employerName = $_POST['Name_of_Employer'] ?? '';
+            $employerAddress = $_POST['Address_of_Employer'] ?? '';
+            $yearsInPresentEmployer = ($_POST['Number_of_Years_in_Present_Employer'] ?? '') ?: null;
+            $typeOfEmployer = $_POST['Type_of_Employer'] ?? '';
+            $lineOfBusiness = $_POST['Major_Line_of_Business'] ?? '';
 
             $con->beginTransaction();
-            $con->exec("SET FOREIGN_KEY_CHECKS = 0");
 
             // Insert new alumni record
             $stmtInsertAlumni = $con->prepare("
@@ -159,9 +158,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 ':personalEmail' => $personalEmail
             ]);
 
-            // Assuming you have a way to get the last inserted ID for the new alumni
-            $alumniID = $con->lastInsertId(); // Get the last inserted ID
+            // Get the last inserted ID for the new alumni
+            $alumniID = $con->lastInsertId(); 
 
+            // Insert employment information
             $stmtInsertEmployment = $con->prepare("
                 INSERT INTO `2024-2025_ed` (
                     Alumni_ID_Number, Employment, Employment_Status, Present_Occupation, Name_of_Employer, 
@@ -184,13 +184,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             ]);
 
             $con->commit();
-
+            $_SESSION['success_message'] = "Alumni added successfully."; // Change success message for adding
             header("Location: alumni_list.php");
-            exit();
+            exit;
         }
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         $con->rollBack();
-        die("Error: " . $e->getMessage());
+        $_SESSION['error_message'] = "Error occurred: " . $e->getMessage();
+        header("Location: alumni_add.php");
+        exit;
     }
 }
-?>
