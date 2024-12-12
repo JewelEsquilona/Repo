@@ -3,27 +3,23 @@ session_start();
 include '../connection.php';
 include 'user_privileges.php';
 
-// Check if user is logged in and has the 'Alumni' role
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'Alumni') {
     header('Location: ../index.php');
     exit();
 }
 
-// Get the user's email from the session
 $user_email = $_SESSION['user_email'] ?? null;
 
 if ($user_email === null) {
     die("User email not found in session. Please log in.");
 }
 
-// Fetch alumni data based on the personal email
 try {
     $query = "SELECT * FROM `2024-2025` WHERE Personal_Email = :email";
     $stmt = $con->prepare($query);
     $stmt->bindParam(':email', $user_email);
     $stmt->execute();
 
-    // Check if alumni data was retrieved successfully
     if ($stmt->rowCount() > 0) {
         $alumniData = $stmt->fetch(PDO::FETCH_ASSOC);
     } else {
@@ -33,34 +29,24 @@ try {
     die("Error fetching alumni data: " . $e->getMessage());
 }
 
-$collegesQuery = "SELECT DISTINCT college FROM courses";
-$collegesStmt = $con->prepare($collegesQuery);
-$collegesStmt->execute();
-$existingColleges = $collegesStmt->fetchAll(PDO::FETCH_COLUMN);
-
 // Fetch employment data
 try {
     $employmentQuery = "SELECT * FROM `2024-2025_ed` WHERE Alumni_ID_Number = :alumni_id";
     $stmtEd = $con->prepare($employmentQuery);
     $stmtEd->bindParam(':alumni_id', $alumniData['Alumni_ID_Number']);
     $stmtEd->execute();
-
-    // Check if employment data was retrieved successfully
     if ($stmtEd->rowCount() > 0) {
         $edData = $stmtEd->fetch(PDO::FETCH_ASSOC);
     } else {
-        $edData = []; // No employment data found
+        $edData = [];
     }
 } catch (PDOException $e) {
     die("Error fetching employment data: " . $e->getMessage());
 }
 
-// Initialize success message variable
 $successMessage = "";
 
-// Process form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Collect form data
     $studentNumber = $_POST['student_number'];
     $lastName = $_POST['last_name'];
     $firstName = $_POST['first_name'];
@@ -140,6 +126,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo "<script>alert('Error updating alumni data. Please try again.');</script>";
     }
 }
+
+$selectedCollege = $alumniData['College'] ?? '';
+$selectedDepartment = $alumniData['Department'] ?? '';
+$selectedSection = $alumniData['Section'] ?? '';
+
+// Fetch existing colleges
+$collegesQuery = "SELECT DISTINCT college FROM courses";
+$collegesStmt = $con->prepare($collegesQuery);
+$collegesStmt->execute();
+$existingColleges = $collegesStmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 
 <!DOCTYPE html>
@@ -189,16 +185,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="row mb-3">
                     <div class="col-md-4">
                         <label for="college" class="form-label">College</label>
-                        <select class="form-control" id="college" name="college" required onchange="updateDepartments()">
+                        <select class="form-control" id="college" name="college" required onchange="updateDepartments(this.value)">
                             <option value="">Select College</option>
                             <?php foreach ($existingColleges as $college): ?>
-                                <option value="<?= htmlspecialchars($college) ?>" <?= (isset($alumniData['College']) && $alumniData['College'] == $college) ? 'selected' : ''; ?>><?= htmlspecialchars($college) ?></option>
+                                <option value="<?= htmlspecialchars($college) ?>" <?= ($selectedCollege === $college) ? 'selected' : ''; ?>><?= htmlspecialchars($college) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="col-md-4">
                         <label for="department" class="form-label">Department</label>
-                        <select class="form-control" id="department" name="department" required onchange="updateSections()">
+                        <select class="form-control" id="department" name="department" required onchange="updateSections(this.value)">
                             <option value="">Select Department</option>
                             <!-- Populate this dynamically -->
                         </select>
@@ -211,6 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </select>
                     </div>
                 </div>
+
                 <div class="row mb-3">
                     <div class="col-md-4">
                         <label for="year_graduated" class="form-label">Year Graduated</label>
@@ -295,89 +292,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 const departmentSelect = document.getElementById('department');
                 const sectionSelect = document.getElementById('section');
 
-                updateDepartments(collegeSelect.value, "<?= htmlspecialchars($alumniData['Department'] ?? '') ?>", "<?= htmlspecialchars($alumniData['Section'] ?? '') ?>");
+                // Prepopulate department and section based on existing alumni data
+                const selectedCollege = collegeSelect.value;
+                const selectedDepartment = "<?= htmlspecialchars($selectedDepartment) ?>";
+                const selectedSection = "<?= htmlspecialchars($selectedSection) ?>";
 
+                if (selectedCollege) {
+                    updateDepartments(selectedCollege, selectedDepartment, selectedSection);
+                }
+
+                // Event listeners
                 collegeSelect.addEventListener('change', function() {
-                    updateDepartments(this.value, '', '');
+                    updateDepartments(this.value);
                 });
 
                 departmentSelect.addEventListener('change', function() {
-                    updateSections(this.value, '');
+                    updateSections(this.value);
                 });
+
+                // Clear and update department dropdown
+                function updateDepartments(college, selectedDepartment = '', selectedSection = '') {
+                    clearDropdown(departmentSelect);
+                    clearDropdown(sectionSelect);
+
+                    if (!college) return;
+
+                    // Fetch departments via an API or use hardcoded logic
+                    fetch(`get_departments.php?college=${encodeURIComponent(college)}`)
+                        .then(response => response.json())
+                        .then(departments => {
+                            departments.forEach(department => {
+                                const option = document.createElement('option');
+                                option.value = department;
+                                option.textContent = department;
+                                if (department === selectedDepartment) option.selected = true;
+                                departmentSelect.appendChild(option);
+                            });
+
+                            if (selectedDepartment) {
+                                updateSections(selectedDepartment, selectedSection);
+                            }
+                        })
+                        .catch(error => console.error('Error fetching departments:', error));
+                }
+
+                // Clear and update section dropdown
+                function updateSections(department, selectedSection = '') {
+                    clearDropdown(sectionSelect);
+
+                    if (!department) return;
+
+                    // Fetch sections via an API or use hardcoded logic
+                    fetch(`get_sections.php?department=${encodeURIComponent(department)}`)
+                        .then(response => response.json())
+                        .then(sections => {
+                            sections.forEach(section => {
+                                const option = document.createElement('option');
+                                option.value = section;
+                                option.textContent = section;
+                                if (section === selectedSection) option.selected = true;
+                                sectionSelect.appendChild(option);
+                            });
+                        })
+                        .catch(error => console.error('Error fetching sections:', error));
+                }
+
+                // Utility to clear a dropdown
+                function clearDropdown(dropdown) {
+                    while (dropdown.options.length > 1) { // Keep the placeholder
+                        dropdown.remove(1);
+                    }
+                }
             });
 
-            function updateDepartments(college, selectedDepartment, selectedSection) {
-                const departmentSelect = document.getElementById('department');
-                const sectionSelect = document.getElementById('section');
-
-                departmentSelect.innerHTML = '<option value="">Select Department</option>';
-                sectionSelect.innerHTML = '<option value="">Select Section</option>';
-
-                // Example data (you would replace this with your actual data)
-                const departments = {
-                    'College of Engineering': ['Computer Engineering', 'Civil Engineering'],
-                    'College of Arts': ['Fine Arts', 'Performing Arts'],
-                    // Add other colleges and their departments here
-                };
-
-                if (departments[college]) {
-                    departments[college].forEach(department => {
-                        const option = document.createElement('option');
-                        option.value = department;
-                        option.textContent = department;
-                        if (department === selectedDepartment) {
-                            option.selected = true;
-                        }
-                        departmentSelect.appendChild(option);
-                    });
-                }
-
-                updateSections(departmentSelect.value, selectedSection);
-            }
-
-            function updateSections(department, selectedSection) {
-                const sectionSelect = document.getElementById('section');
-                sectionSelect.innerHTML = '<option value="">Select Section</option>';
-
-                // Example data (you would replace this with your actual data)
-                const sections = {
-                    'Computer Engineering': ['CE1', 'CE2'],
-                    'Civil Engineering': ['CIV1', 'CIV2'],
-                    'Fine Arts': ['FA1', 'FA2'],
-                    'Performing Arts': ['PA1', 'PA2'],
-                    // Add other departments and their sections here
-                };
-
-                if (sections[department]) {
-                    sections[department].forEach(section => {
-                        const option = document.createElement('option');
-                        option.value = section;
-                        option.textContent = section;
-                        if (section === selectedSection) {
-                            option.selected = true;
-                        }
-                        sectionSelect.appendChild(option);
-                    });
-                }
-            }
-
             function toggleEmploymentFields() {
-                const employmentSelect = document.getElementById('employment');
-                const employmentFields = document.getElementById('employmentFields');
-                const employmentStatusContainer = document.getElementById('employment-status-container');
+                const employment = document.getElementById("employment").value;
+                const employmentStatusContainer = document.getElementById("employment-status-container");
+                const employmentFields = document.getElementById("employmentFields");
+                const employmentStatus = document.getElementById("employment_status");
 
-                if (employmentSelect.value === 'Employed') {
-                    employmentFields.style.display = 'block';
-                    employmentStatusContainer.style.display = 'block';
+                if (employment === "Employed") {
+                    employmentStatusContainer.style.display = "block";
+                    employmentFields.style.display = "block";
+                    employmentStatus.required = true;
                 } else {
-                    employmentFields.style.display = 'none';
-                    employmentStatusContainer.style.display = 'none';
+                    employmentStatusContainer.style.display = "none";
+                    employmentFields.style.display = "none";
+                    employmentStatus.required = false;
                 }
             }
-
-            // Initialize the display of employment fields based on the current employment status
-            toggleEmploymentFields();
         </script>
+
     </div>
 </body>
 
