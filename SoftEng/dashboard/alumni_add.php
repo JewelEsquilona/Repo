@@ -1,3 +1,92 @@
+<?php
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+include('../connection.php');
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    try {
+        $studentNumber = $_POST['Student_Number'] ?? '';
+        $lastName = $_POST['Last_Name'] ?? '';
+        $firstName = $_POST['First_Name'] ?? '';
+        $middleName = $_POST['Middle_Name'] ?? '';
+        $college = $_POST['College'] ?? '';
+        $department = $_POST['Department'] ?? '';
+        $section = $_POST['Section'] ?? '';
+        $yearGraduated = $_POST['Year_Graduated'] ?? '';
+        $contactNumber = $_POST['Contact_Number'] ?? '';
+        $personalEmail = $_POST['Personal_Email'] ?? '';
+        $employment = $_POST['Employment'] ?? '';
+        $employmentStatus = $_POST['Employment_Status'] ?? '';
+        $presentOccupation = $_POST['Present_Occupation'] ?? '';
+        $employerName = $_POST['Name_of_Employer'] ?? '';
+        $employerAddress = $_POST['Address_of_Employer'] ?? '';
+        $yearsInPresentEmployer = ($_POST['Number_of_Years_in_Present_Employer'] ?? '') ?: null;
+        $typeOfEmployer = $_POST['Type_of_Employer'] ?? '';
+        $lineOfBusiness = $_POST['Major_Line_of_Business'] ?? '';
+
+        $con->beginTransaction();
+
+        // Insert new alumni record
+        $stmtInsertAlumni = $con->prepare("
+            INSERT INTO `2024-2025` (
+                Student_Number, Last_Name, First_Name, Middle_Name, College, Department, Section, 
+                Year_Graduated, Contact_Number, Personal_Email
+            ) VALUES (
+                :studentNumber, :lastName, :firstName, :middleName, :college, :department, :section, 
+                :yearGraduated, :contactNumber, :personalEmail
+            )
+        ");
+        $stmtInsertAlumni->execute([
+            ':studentNumber' => $studentNumber,
+            ':lastName' => $lastName,
+            ':firstName' => $firstName,
+            ':middleName' => $middleName,
+            ':college' => $college,
+            ':department' => $department,
+            ':section' => $section,
+            ':yearGraduated' => $yearGraduated,
+            ':contactNumber' => $contactNumber,
+            ':personalEmail' => $personalEmail
+        ]);
+
+        // Get the last inserted ID for the new alumni
+        $alumniID = $con->lastInsertId(); 
+
+        // Insert employment information
+        $stmtInsertEmployment = $con->prepare("
+            INSERT INTO `2024-2025_ed` (
+                Alumni_ID_Number, Employment, Employment_Status, Present_Occupation, Name_of_Employer, 
+                Address_of_Employer, Number_of_Years_in_Present_Employer, Type_of_Employer, Major_Line_of_Business
+            ) VALUES (
+                :alumniID, :employment, :employmentStatus, :presentOccupation, :employerName, :employerAddress, 
+                :yearsInPresentEmployer, :typeOfEmployer, :lineOfBusiness
+            )
+        ");
+        $stmtInsertEmployment->execute([
+            ':alumniID' => $alumniID,
+            ':employment' => $employment,
+            ':employmentStatus' => $employmentStatus,
+            ':presentOccupation' => $presentOccupation,
+            ':employerName' => $employerName,
+            ':employerAddress' => $employerAddress,
+            ':yearsInPresentEmployer' => $yearsInPresentEmployer,
+            ':typeOfEmployer' => $typeOfEmployer,
+            ':lineOfBusiness' => $lineOfBusiness,
+        ]);
+
+        $con->commit();
+        $_SESSION['success_message'] = "Alumni added successfully.";
+        header("Location: alumni_list.php");
+        exit;
+    } catch (Exception $e) {
+        $con->rollBack();
+        $_SESSION['error_message'] = "Error occurred: " . $e->getMessage();
+        header("Location: alumni_add.php");
+        exit;
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -15,24 +104,13 @@
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
-        
+
         include '../connection.php';
 
         $collegesQuery = "SELECT DISTINCT college FROM courses";
-        $departmentsQuery = "SELECT DISTINCT department FROM courses";
-        $sectionsQuery = "SELECT DISTINCT section FROM courses";
-
         $collegesStmt = $con->prepare($collegesQuery);
-        $departmentsStmt = $con->prepare($departmentsQuery);
-        $sectionsStmt = $con->prepare($sectionsQuery);
-
         $collegesStmt->execute();
-        $departmentsStmt->execute();
-        $sectionsStmt->execute();
-
         $existingColleges = $collegesStmt->fetchAll(PDO::FETCH_COLUMN);
-        $existingDepartments = $departmentsStmt->fetchAll(PDO::FETCH_COLUMN);
-        $existingSections = $sectionsStmt->fetchAll(PDO::FETCH_COLUMN);
         ?>
 
         <?php if (isset($_SESSION['success_message'])): ?>
@@ -63,7 +141,6 @@
                                     <label for="Student_Number" class="col-form-label">Student Number:</label>
                                     <input type="text" class="form-control" id="Student_Number" name="Student_Number" required autocomplete="off">
                                 </div>
-                                <input type="hidden" name="Alumni_ID_Number" value="<?php echo htmlspecialchars($alumniID); ?>">
                                 <div class="mb-3">
                                     <label for="Last_Name" class="col-form-label">Last Name:</label>
                                     <input type="text" class="form-control" id="Last_Name" name="Last_Name" required autocomplete="off">
@@ -77,23 +154,23 @@
                                     <input type="text" class="form-control" id="Middle_Name" name="Middle_Name" autocomplete="off">
                                 </div>
                                 <div class="mb-3">
-                                    <label for="College" class="col-form-label">College:</label>
-                                    <select class="form-select" id="College" name="College" required onchange="updateDepartments()">
+                                    <label for="Add_College" class="col-form-label">College:</label>
+                                    <select class="form-select" id="Add_College" name="College" required onchange="updateAddDepartments()">
                                         <option value="">Select College</option>
                                         <?php foreach ($existingColleges as $college): ?>
                                             <option value="<?= htmlspecialchars($college) ?>"><?= htmlspecialchars($college) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div class="mb-3" id="DepartmentContainer" style="display: none;">
-                                    <label for="Department" class="col-form-label">Department:</label>
-                                    <select class="form-select" id="Department" name="Department" required onchange="updateSections()">
+                                <div class="mb-3" id="Add_DepartmentContainer" style="display: none;">
+                                    <label for="Add_Department" class="col-form-label">Department:</label>
+                                    <select class="form-select" id="Add_Department" name="Department" required onchange="updateAddSections()">
                                         <option value="">Select Department</option>
                                     </select>
                                 </div>
-                                <div class="mb-3" id="SectionContainer" style="display: none;">
-                                    <label for="Section" class="col-form-label">Section:</label>
-                                    <select class="form-select" id="Section" name="Section" required>
+                                <div class="mb-3" id="Add_SectionContainer" style="display: none;">
+                                    <label for="Add_Section" class="col-form-label">Section:</label>
+                                    <select class="form-select" id="Add_Section" name="Section" required>
                                         <option value="">Select Section</option>
                                     </select>
                                 </div>
@@ -167,51 +244,53 @@
     <script src="../assets/js/script.js"></script>
     <script src="../assets/js/bootstrap.bundle.js"></script>
     <script>
-        function updateDepartments() {
-            const college = document.getElementById('College').value;
-            const departmentSelect = document.getElementById('Department');
-            const sectionSelect = document.getElementById('Section');
+        function updateAddDepartments() {
+            const college = document.getElementById('Add_College').value;
+            const departmentSelect = document.getElementById('Add_Department');
+            const sectionSelect = document.getElementById('Add_Section');
 
             departmentSelect.innerHTML = '<option value="">Select Department</option>';
             sectionSelect.innerHTML = '<option value="">Select Section</option>';
 
             if (college) {
-                fetch(`get_departments.php?college=${college}`)
+                fetch(`get_departments.php?college=${encodeURIComponent(college)}`)
                     .then(response => response.json())
                     .then(data => {
                         data.forEach(department => {
                             const option = document.createElement('option');
-                            option.value = department;
-                            option.textContent = department;
+                            option.value = department; // Use original case for display
+                            option.textContent = department; // Display original case
                             departmentSelect.appendChild(option);
                         });
-                        document.getElementById('DepartmentContainer').style.display = 'block';
-                    });
+                        document.getElementById('Add_DepartmentContainer').style.display = 'block';
+                    })
+                    .catch(error => console.error('Error fetching departments:', error));
             } else {
-                document.getElementById('DepartmentContainer').style.display = 'none';
+                document.getElementById('Add_DepartmentContainer').style.display = 'none';
             }
         }
 
-        function updateSections() {
-            const department = document.getElementById('Department').value;
-            const sectionSelect = document.getElementById('Section');
+        function updateAddSections() {
+            const department = document.getElementById('Add_Department').value;
+            const sectionSelect = document.getElementById('Add_Section');
 
             sectionSelect.innerHTML = '<option value="">Select Section</option>';
 
             if (department) {
-                fetch(`get_sections.php?department=${department}`)
+                fetch(`get_sections.php?department=${encodeURIComponent(department)}`)
                     .then(response => response.json())
                     .then(data => {
                         data.forEach(section => {
                             const option = document.createElement('option');
-                            option.value = section;
-                            option.textContent = section;
+                            option.value = section; // Use original case for display
+                            option.textContent = section; // Display original case
                             sectionSelect.appendChild(option);
                         });
-                        document.getElementById('SectionContainer').style.display = 'block';
-                    });
+                        document.getElementById('Add_SectionContainer').style.display = 'block';
+                    })
+                    .catch(error => console.error('Error fetching sections:', error));
             } else {
-                document.getElementById('SectionContainer').style.display = 'none';
+                document.getElementById('Add_SectionContainer').style.display = 'none';
             }
         }
 
