@@ -260,7 +260,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 option.textContent = department;
                                 departmentSelect.appendChild(option);
                             });
-                            departmentContainer.style.display = 'block'; // Show the department container
+                            // Show the department container only for Program Chair
+                           const role = document.querySelector('input[name="role"]:checked');
+                            if (role && role.value === 'Program Chair') {
+                                document.getElementById('departmentContainer').style.display = 'block';
+                            }
                         })
                         .catch(error => console.error('Error fetching departments:', error));
                 } else {
